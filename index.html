@@ -1,31 +1,37 @@
+
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Typing Game for Young Programmers</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aventura Teclado Kids</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Arial', sans-serif;
+    }
+    /* Additional global styles if absolutely necessary, prefer Tailwind classes */
+    .custom-font-comic {
+        font-family: "Comic Sans MS", "Comic Sans", cursive;
+    }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "react": "https://esm.sh/react@^19.1.0",
+    "@testing-library/react": "https://esm.sh/@testing-library/react@^16.3.0",
+    "@testing-library/jest-dom": "https://esm.sh/@testing-library/jest-dom@^6.6.3",
+    "@jest/globals": "https://esm.sh/@jest/globals@^29.7.0"
+  }
+}
+</script>
 </head>
-<body>
-    <header>
-        <h1>Typing Game</h1>
-    </header>
-    <div id="game-container">
-        <canvas id="game-canvas"></canvas>
-    </div>
-    <button id="start-button">Start Game</button>
-    <div id="ui-container">
-        <div id="score-display">Score: 0</div>
-        <div id="level-display">Level: 1</div>
-        <div id="typed-word-display"></div>
-        <div id="message-display">
-            <button id="restart-button" style="display:none;">Restart Game</button>
-        </div>
-    </div>
-    <script src="game.js"></script>
-    <script src="test.js"></script>
-    <div id="test-results" style="margin-top: 20px; border: 1px solid #ccc; padding: 10px;">
-        <h2>Test Results</h2>
-    </div>
+<body class="bg-sky-50 text-slate-800">
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
 </body>
 </html>
+<link rel="stylesheet" href="index.css">
+<script src="index.tsx" type="module"></script>
