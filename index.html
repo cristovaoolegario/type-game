@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Typing Game for Young Programmers</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>Typing Game</h1>
+    </header>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+    </div>
+    <button id="start-button">Start Game</button>
+    <div id="ui-container">
+        <div id="score-display">Score: 0</div>
+        <div id="level-display">Level: 1</div>
+        <div id="typed-word-display"></div>
+        <div id="message-display">
+            <button id="restart-button" style="display:none;">Restart Game</button>
+        </div>
+    </div>
+    <script src="game.js"></script>
+    <script src="test.js"></script>
+    <div id="test-results" style="margin-top: 20px; border: 1px solid #ccc; padding: 10px;">
+        <h2>Test Results</h2>
+    </div>
+</body>
+</html>

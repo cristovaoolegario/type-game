@@ -1,0 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700&display=swap');
+
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: 'Nunito', sans-serif;
+    background-color: lightblue; /* More inviting background */
+    color: #333; /* Dark grey for good contrast */
+    margin: 0;
+    padding: 20px;
+    min-height: 100vh;
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #0056b3; /* A fun, darker blue */
+    font-size: 2.5em; /* Slightly larger */
+}
+
+#game-container {
+    margin-bottom: 20px;
+}
+
+#game-canvas {
+    border: 2px solid #007bff; /* Border color matching theme */
+    background-color: #f0f8ff; /* AliceBlue - very light, contrasts with dark words */
+    border-radius: 8px; /* Rounded corners for canvas */
+}
+
+#start-button,
+#restart-button {
+    background-color: #28a745; /* Bright, friendly green */
+    color: white;
+    padding: 12px 25px; /* Increased padding */
+    border: none;
+    border-radius: 8px;
+    font-size: 1.2em; /* Larger font */
+    cursor: pointer;
+    margin: 10px; /* Spacing */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease;
+}
+
+#start-button:hover,
+#restart-button:hover {
+    background-color: #218838; /* Darker green on hover */
+}
+
+#ui-container {
+    display: flex;
+    justify-content: space-around; /* Better spacing for elements */
+    align-items: center; /* Align items vertically */
+    width: 800px;
+    margin-top: 10px;
+    padding: 10px;
+    background-color: rgba(255, 255, 255, 0.7); /* Semi-transparent white for a softer look */
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+#score-display,
+#level-display,
+#typed-word-display,
+#message-display {
+    background-color: #ffffff; /* White background for UI elements */
+    padding: 12px 15px; /* Increased padding */
+    border-radius: 5px;
+    margin: 5px; /* Spacing between elements */
+    font-size: 1.1em; /* Consistent font size */
+    color: #333;
+    flex-grow: 1;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05); /* Subtle shadow */
+    min-height: 1.8em; /* Ensure consistent height */
+    display: flex; /* For centering content if needed */
+    align-items: center; /* Center content vertically */
+    justify-content: center; /* Center content horizontally */
+}
+
+#typed-word-display {
+    border: 1px solid #007bff; /* Theme color border */
+    background-color: #f8f9fa; /* Slightly off-white */
+}
+
+/* Ensure message display still allows button to be on right if needed, or center if just text */
+#message-display {
+    justify-content: space-around; /* Adjust as message content changes (text vs button) */
+}
+
+/* Ensure button inside message-display gets some specific styling if needed */
+#message-display #restart-button {
+    margin: 0; /* Reset margin if it's inside another styled flex item */
+    padding: 10px 20px; /* Slightly smaller if inside message display */
+    font-size: 1em;
+}
