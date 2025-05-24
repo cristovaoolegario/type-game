@@ -8,12 +8,36 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body {
-      font-family: 'Arial', sans-serif;
+      /* Base dark color */
+      background-color: #0F172A; /* slate-900 */
+      /* Stardust effect */
+      background-image:
+        radial-gradient(circle at 20% 20%, rgba(200, 200, 220, 0.08) 0.5px, transparent 1px),
+        radial-gradient(circle at 75% 25%, rgba(200, 200, 220, 0.05) 0.5px, transparent 1px),
+        radial-gradient(circle at 25% 75%, rgba(200, 200, 220, 0.05) 0.5px, transparent 1px),
+        radial-gradient(circle at 80% 30%, rgba(220, 220, 240, 0.07) 0.5px, transparent 1px),
+        radial-gradient(circle at 30% 80%, rgba(220, 240, 220, 0.06) 0.5px, transparent 1px),
+        radial-gradient(circle at 60% 70%, rgba(240, 220, 220, 0.09) 1px, transparent 1.5px),
+        linear-gradient(to bottom right, #0B1021, #1E293B, #0F172A); /* slate-900, indigo-950ish */
+
+      background-size: 100px 100px, 120px 120px, 180px 180px, 80px 80px, 110px 110px, 150px 150px, 100% 100%;
+      background-position: 0 0, 40px 60px, 70px 20px, 20px 100px, 50px 130px, 140px 80px, 0 0;
+      background-repeat: repeat, repeat, repeat, repeat, repeat, repeat, no-repeat;
+      
+      color: #CBD5E1; /* slate-300 */
+      min-height: 100vh;
+      overflow-x: hidden; /* Prevent horizontal scroll from stardust patterns if they extend */
+      
+      /* Global glowing text effect */
+      text-shadow: 
+        0 0 3px rgba(200, 225, 255, 0.4),  /* Soft bluish-white inner glow */
+        0 0 5px rgba(170, 210, 255, 0.3),  /* Slightly wider softer glow */
+        0 0 7px rgba(120, 180, 255, 0.2);  /* Faintest outer halo for depth */
     }
-    /* Additional global styles if absolutely necessary, prefer Tailwind classes */
     .custom-font-comic {
         font-family: "Comic Sans MS", "Comic Sans", cursive;
     }
+    /* Additional global styles if absolutely necessary, prefer Tailwind classes */
   </style>
 <script type="importmap">
 {
@@ -23,12 +47,14 @@
     "react": "https://esm.sh/react@^19.1.0",
     "@testing-library/react": "https://esm.sh/@testing-library/react@^16.3.0",
     "@testing-library/jest-dom": "https://esm.sh/@testing-library/jest-dom@^6.6.3",
-    "@jest/globals": "https://esm.sh/@jest/globals@^29.7.0"
+    "@jest/globals": "https://esm.sh/@jest/globals@^29.7.0",
+    "./audioManager": "/audioManager.js",
+    "./audioManager.js": "/audioManager.js"
   }
 }
 </script>
 </head>
-<body class="bg-sky-50 text-slate-800">
+<body class="custom-font-comic">
   <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>

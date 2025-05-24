@@ -2,8 +2,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ShortcutDecoderItem, MemoryCardState, MatchItemState } from '../types';
 import { SHORTCUT_DECODER_ITEMS, shuffleArray } from '../constants';
-import CheckIcon from '../components/icons/CheckIcon';
-import XIcon from '../components/icons/XIcon';
+import CheckIcon from '../components/icons/CheckIcon'; 
+import XIcon from '../components/icons/XIcon';  
+import { playSound, SfxType } from '../audioManager';     
 
 interface ShortcutDecoderGameProps {
   onExit: () => void;
@@ -12,18 +13,16 @@ interface ShortcutDecoderGameProps {
 type SubGameMode = 'memory' | 'matching' | 'selection';
 type GameStatus = 'playing' | 'won' | 'idle';
 
-const ITEMS_PER_GAME = 6; // Number of shortcut pairs to use in each game instance
+const ITEMS_PER_GAME = 6; 
 
 const ShortcutDecoderGame: React.FC<ShortcutDecoderGameProps> = ({ onExit }) => {
   const [subGameMode, setSubGameMode] = useState<SubGameMode>('selection');
   const [gameStatus, setGameStatus] = useState<GameStatus>('idle');
   
-  // For Memory Game
   const [memoryCards, setMemoryCards] = useState<MemoryCardState[]>([]);
-  const [flippedMemoryCards, setFlippedMemoryCards] = useState<number[]>([]); // Indices of flipped cards
+  const [flippedMemoryCards, setFlippedMemoryCards] = useState<number[]>([]); 
   const [memoryScore, setMemoryScore] = useState(0);
 
-  // For Matching Game
   const [matchShortcuts, setMatchShortcuts] = useState<MatchItemState[]>([]);
   const [matchFunctions, setMatchFunctions] = useState<MatchItemState[]>([]);
   const [selectedMatchShortcut, setSelectedMatchShortcut] = useState<MatchItemState | null>(null);
@@ -36,8 +35,8 @@ const ShortcutDecoderGame: React.FC<ShortcutDecoderGameProps> = ({ onExit }) => 
     return shuffledItems.slice(0, numItems);
   }, []);
 
-  // --- MEMORY GAME LOGIC ---
   const setupMemoryGame = useCallback(() => {
+    playSound(SfxType.GAME_START);
     const gameItems = prepareGameData(ITEMS_PER_GAME);
     const cards: MemoryCardState[] = [];
     gameItems.forEach(item => {
@@ -55,6 +54,7 @@ const ShortcutDecoderGame: React.FC<ShortcutDecoderGameProps> = ({ onExit }) => 
     if (gameStatus !== 'playing' || memoryCards[index].isFlipped || memoryCards[index].isMatched || flippedMemoryCards.length >= 2) {
       return;
     }
+    playSound(SfxType.UI_CLICK);
 
     const newFlippedCards = [...flippedMemoryCards, index];
     setFlippedMemoryCards(newFlippedCards);
@@ -68,7 +68,8 @@ const ShortcutDecoderGame: React.FC<ShortcutDecoderGameProps> = ({ onExit }) => 
       const card1 = updatedCards[newFlippedCards[0]];
       const card2 = updatedCards[newFlippedCards[1]];
 
-      if (card1.pairId === card2.pairId) { // Match!
+      if (card1.pairId === card2.pairId) { 
+        playSound(SfxType.POSITIVE_FEEDBACK);
         setMemoryScore(s => s + 1);
         setFeedbackMessage('Par encontrado!');
         const matchedCards = updatedCards.map(card =>
@@ -78,13 +79,15 @@ const ShortcutDecoderGame: React.FC<ShortcutDecoderGameProps> = ({ onExit }) => 
           setMemoryCards(matchedCards);
           setFlippedMemoryCards([]);
           if (memoryScore + 1 === ITEMS_PER_GAME) {
+            playSound(SfxType.POSITIVE_FEEDBACK); // Overall win
             setGameStatus('won');
             setFeedbackMessage('Parabéns! Todos os pares encontrados!');
           } else {
             setFeedbackMessage('Continue...');
           }
         }, 1000);
-      } else { // No match
+      } else { 
+        playSound(SfxType.NEGATIVE_FEEDBACK);
         setFeedbackMessage('Não combinam. Tente de novo.');
         setTimeout(() => {
           const resetCards = updatedCards.map(card =>
@@ -98,8 +101,8 @@ const ShortcutDecoderGame: React.FC<ShortcutDecoderGameProps> = ({ onExit }) => 
     }
   };
 
-  // --- MATCHING GAME LOGIC ---
   const setupMatchingGame = useCallback(() => {
+    playSound(SfxType.GAME_START);
     const gameItems = prepareGameData(ITEMS_PER_GAME);
     const shortcuts: MatchItemState[] = gameItems.map(item => ({
       id: item.id + "_s", pairId: item.id, type: 'shortcut', content: item.shortcutDisplay, isMatched: false
@@ -118,15 +121,18 @@ const ShortcutDecoderGame: React.FC<ShortcutDecoderGameProps> = ({ onExit }) => 
 
   const handleMatchShortcutClick = (item: MatchItemState) => {
     if (gameStatus !== 'playing' || item.isMatched) return;
+    playSound(SfxType.UI_CLICK);
     setSelectedMatchShortcut(item);
     setMatchShortcuts(prev => prev.map(s => s.id === item.id ? {...s, isSelected: true} : {...s, isSelected: false}));
-    setFeedbackMessage(`Selecionado: ${item.content}. Agora clique na função correspondente.`);
+    setFeedbackMessage(`Selecionado: ${item.content}. Agora clique na função.`);
   };
 
   const handleMatchFunctionClick = (funcItem: MatchItemState) => {
     if (gameStatus !== 'playing' || !selectedMatchShortcut || funcItem.isMatched) return;
+    playSound(SfxType.UI_CLICK);
 
-    if (selectedMatchShortcut.pairId === funcItem.pairId) { // Match!
+    if (selectedMatchShortcut.pairId === funcItem.pairId) { 
+      playSound(SfxType.POSITIVE_FEEDBACK);
       setMatchingScore(s => s + 1);
       setFeedbackMessage('Correto!');
       setMatchShortcuts(prev => prev.map(s => s.id === selectedMatchShortcut.id ? {...s, isMatched: true, isSelected: false} : s));
@@ -134,115 +140,158 @@ const ShortcutDecoderGame: React.FC<ShortcutDecoderGameProps> = ({ onExit }) => 
       setSelectedMatchShortcut(null);
 
       if (matchingScore + 1 === ITEMS_PER_GAME) {
+        playSound(SfxType.POSITIVE_FEEDBACK); // Overall win
         setGameStatus('won');
         setFeedbackMessage('Parabéns! Todas as combinações feitas!');
       } else {
          setTimeout(() => setFeedbackMessage('Continue combinando...'), 1000);
       }
-    } else { // No match
+    } else { 
+      playSound(SfxType.NEGATIVE_FEEDBACK);
       setFeedbackMessage('Combinação incorreta. Tente novamente.');
-      setMatchShortcuts(prev => prev.map(s => ({...s, isSelected: false}))); // Deselect shortcut
+      setMatchShortcuts(prev => prev.map(s => ({...s, isSelected: false}))); 
       setSelectedMatchShortcut(null);
        setTimeout(() => setFeedbackMessage('Combine o atalho com sua função.'), 1500);
     }
   };
   
-  const resetAndSelectMode = () => {
+  const handleModeSelectionClick = (mode: SubGameMode) => {
+    playSound(SfxType.UI_CLICK);
+    setSubGameMode(mode);
+    if (mode === 'memory') setupMemoryGame();
+    if (mode === 'matching') setupMatchingGame();
+  }
+  
+  const handleResetAndSelectModeClick = () => {
+    playSound(SfxType.UI_CLICK);
     setSubGameMode('selection');
     setGameStatus('idle');
     setFeedbackMessage('');
   }
 
-  // --- UI RENDERING ---
+  const handleExitClick = () => {
+    // playSound(SfxType.UI_CLICK); // Handled by App.tsx
+    onExit();
+  }
+
+
   if (subGameMode === 'selection') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-tr from-purple-400 via-pink-500 to-red-600 p-6 text-white custom-font-comic">
-        <div className="bg-white/25 backdrop-blur-md p-10 rounded-xl shadow-2xl text-center max-w-lg">
-          <h2 className="text-4xl font-bold mb-8">Decifrador de Atalhos</h2>
-          <p className="mb-8 text-lg">Escolha um modo de jogo:</p>
+      <div className="flex flex-col items-center justify-center min-h-screen p-6 text-slate-100 custom-font-comic">
+        <div className="bg-slate-800/70 backdrop-blur-md p-10 rounded-xl shadow-2xl text-center max-w-lg border border-slate-700/50">
+          <h2 className="text-4xl font-bold mb-8 text-cyan-400" style={{ textShadow: '0 0 6px theme("colors.cyan.500 / 60%")' }}>Decifrador de Atalhos</h2>
+          <p className="mb-8 text-lg text-slate-300">Escolha um modo de jogo:</p>
           <button
-            onClick={() => { setSubGameMode('memory'); setupMemoryGame(); }}
-            className="w-full mb-4 px-8 py-4 bg-sky-500 text-white text-2xl font-semibold rounded-lg shadow-md hover:bg-sky-600 transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-sky-300"
+            onClick={() => handleModeSelectionClick('memory')}
+            className="w-full mb-4 px-8 py-4 bg-sky-600 text-white text-2xl font-semibold rounded-lg shadow-md hover:bg-sky-500 transition-all transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-sky-700 focus:ring-opacity-50"
           >
             Modo Memória
           </button>
           <button
-            onClick={() => { setSubGameMode('matching'); setupMatchingGame(); }}
-            className="w-full px-8 py-4 bg-emerald-500 text-white text-2xl font-semibold rounded-lg shadow-md hover:bg-emerald-600 transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-emerald-300"
+            onClick={() => handleModeSelectionClick('matching')}
+            className="w-full px-8 py-4 bg-purple-600 text-white text-2xl font-semibold rounded-lg shadow-md hover:bg-purple-500 transition-all transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-purple-700 focus:ring-opacity-50"
           >
             Modo Correspondência
           </button>
-          <button onClick={onExit} className="mt-10 block mx-auto px-6 py-2 bg-slate-500 text-white text-lg rounded-md hover:bg-slate-600 transition">Voltar ao Menu Principal</button>
+          <button onClick={handleExitClick} className="mt-10 block mx-auto px-6 py-2 bg-slate-600 text-slate-200 text-lg rounded-md hover:bg-slate-500 transition">Voltar ao Menu Principal</button>
         </div>
       </div>
     );
   }
   
-  // Common elements for playing/won states
   const renderGameScreen = (title: string, gameContent: React.ReactNode, score: number, totalItems: number) => (
-     <div className={`flex flex-col items-center min-h-screen p-4 custom-font-comic text-white 
-        ${subGameMode === 'memory' ? 'bg-gradient-to-br from-sky-400 via-cyan-500 to-blue-600' : 'bg-gradient-to-br from-emerald-400 via-green-500 to-lime-600'}`}>
-        <header className="w-full max-w-4xl p-4 bg-white/20 backdrop-blur-md rounded-lg shadow-lg mb-6">
-          <h1 className="text-3xl font-bold text-center mb-2">{title}</h1>
+     <div className={`flex flex-col items-center min-h-screen p-4 custom-font-comic text-slate-100`}>
+        <header className="w-full max-w-4xl p-4 bg-slate-800/60 backdrop-blur-sm rounded-lg shadow-xl mb-6 border border-slate-700/50">
+          <h1 className="text-3xl font-bold text-center mb-2 text-cyan-400" style={{ textShadow: '0 0 5px theme("colors.cyan.500 / 50%")' }}>{title}</h1>
           <div className="flex justify-between items-center">
-            <p className="text-xl">Pares Encontrados: <span className="font-bold text-yellow-300">{score} / {totalItems}</span></p>
-             <button onClick={resetAndSelectMode} className="px-4 py-2 bg-slate-200/70 text-slate-800 text-sm rounded-md hover:bg-slate-100/90 transition">Trocar Modo</button>
+            <p className="text-xl text-slate-300">Pares Encontrados: <span className="font-bold text-yellow-300" style={{ textShadow: '0 0 3px theme("colors.yellow.400 / 60%")' }}>{score} / {totalItems}</span></p>
+             <button onClick={handleResetAndSelectModeClick} className="px-4 py-2 bg-slate-700/80 text-slate-300 text-sm rounded-md hover:bg-slate-600/80 transition focus:outline-none focus:ring-2 focus:ring-slate-500">Trocar Modo</button>
           </div>
         </header>
 
         {gameStatus === 'won' ? (
-          <div className="flex flex-col items-center justify-center bg-white/30 backdrop-blur-lg p-8 rounded-xl shadow-xl text-center">
-            <h2 className="text-5xl font-bold mb-4">🎉 Você Venceu! 🎉</h2>
-            <p className="text-3xl mb-6">{feedbackMessage}</p>
-            <button
-              onClick={subGameMode === 'memory' ? setupMemoryGame : setupMatchingGame}
-              className="mt-4 px-8 py-3 bg-yellow-500 text-white text-xl font-semibold rounded-lg shadow-md hover:bg-yellow-600 transition mr-4"
-            >
-              Jogar Novamente ({subGameMode === 'memory' ? "Memória" : "Correspondência"})
-            </button>
-            <button onClick={resetAndSelectMode} className="mt-4 px-8 py-3 bg-slate-600 text-white text-xl font-semibold rounded-lg shadow-md hover:bg-slate-700 transition">Voltar à Seleção</button>
+          <div className="flex flex-col items-center justify-center bg-slate-800/70 backdrop-blur-md p-8 rounded-xl shadow-2xl text-center border border-slate-700/50">
+            <h2 className="text-5xl font-bold mb-4 text-green-400" style={{ textShadow: '0 0 8px theme("colors.green.400 / 70%")' }}>🎉 Você Venceu! 🎉</h2>
+            <p className="text-3xl mb-6 text-slate-200">{feedbackMessage}</p>
+            <div className="flex gap-4 mt-4">
+                <button
+                    onClick={() => { 
+                        playSound(SfxType.UI_CLICK); 
+                        subGameMode === 'memory' ? setupMemoryGame() : setupMatchingGame(); 
+                    }}
+                    className="px-8 py-3 bg-yellow-500 text-slate-900 text-xl font-semibold rounded-lg shadow-md hover:bg-yellow-400 transition-all transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-yellow-600 focus:ring-opacity-50"
+                >
+                    Jogar Novamente ({subGameMode === 'memory' ? "Memória" : "Correspondência"})
+                </button>
+                <button onClick={handleResetAndSelectModeClick} className="px-8 py-3 bg-slate-600 text-slate-200 text-xl font-semibold rounded-lg shadow-md hover:bg-slate-500 transition-all transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-slate-700 focus:ring-opacity-50">
+                    Voltar à Seleção
+                </button>
+            </div>
           </div>
         ) : (
           <>
-            <div className="w-full max-w-3xl p-2 sm:p-4 bg-white/25 backdrop-blur-md rounded-xl shadow-lg text-center mb-6 min-h-[60px] flex items-center justify-center">
-                <p className={`text-xl transition-all duration-300 ${feedbackMessage.includes("Correto") || feedbackMessage.includes("Par") ? 'text-green-300' : feedbackMessage.includes("Incorreto") || feedbackMessage.includes("Não combinam") ? 'text-red-300' : 'text-yellow-200'}`}>
+            <div className="w-full max-w-3xl p-2 sm:p-3 bg-slate-800/60 backdrop-blur-sm rounded-xl shadow-lg text-center mb-6 min-h-[60px] flex items-center justify-center border border-slate-700/50">
+                <p className={`text-xl transition-all duration-300 
+                    ${feedbackMessage.includes("Correto") || feedbackMessage.includes("Par encontrado") ? 'text-green-400' : 
+                      feedbackMessage.includes("Incorreto") || feedbackMessage.includes("Não combinam") ? 'text-red-400' : 
+                      'text-yellow-300'}`}
+                    style={{ textShadow: `0 0 5px ${
+                        feedbackMessage.includes("Correto") || feedbackMessage.includes("Par encontrado") ? 'rgba(74, 222, 128, 0.5)' : 
+                        feedbackMessage.includes("Incorreto") || feedbackMessage.includes("Não combinam") ? 'rgba(248, 113, 113, 0.5)' : 
+                        'rgba(250, 204, 21, 0.5)' 
+                    }`}}
+                >
                     {feedbackMessage || "Carregando..."}
                 </p>
             </div>
             {gameContent}
           </>
         )}
-        <button onClick={onExit} className="mt-8 px-6 py-2 bg-slate-200/70 text-slate-800 text-lg rounded-md hover:bg-slate-100/90 transition">Menu Principal</button>
+        <button onClick={handleExitClick} className="mt-8 px-6 py-2 bg-slate-700/80 text-slate-300 text-lg rounded-md hover:bg-slate-600/80 transition focus:outline-none focus:ring-2 focus:ring-slate-500">Menu Principal</button>
       </div>
   );
 
 
   if (subGameMode === 'memory') {
     const memoryGameContent = (
-      <div className="grid grid-cols-3 sm:grid-cols-4 gap-4 sm:gap-6 max-w-xl sm:max-w-3xl mx-auto">
-        {memoryCards.map((card, index) => (
-          <button
-            key={card.id}
-            onClick={() => handleMemoryCardClick(index)}
-            disabled={card.isMatched && card.isFlipped}
-            className={`
-              w-40 h-28 p-2 rounded-lg shadow-lg transition-all duration-300 
-              flex items-center justify-center text-center
-              focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-sky-700 focus:ring-white
-              ${card.isMatched 
-                ? 'bg-green-700/50 text-green-100 border-4 border-green-500 opacity-80 cursor-default' // Matched card style
-                : card.isFlipped 
-                  ? 'bg-sky-200 text-sky-800 border border-sky-400' // Flipped card style
-                  : 'bg-sky-600 hover:bg-sky-500 text-sky-100 border border-sky-700' // Face-down card style
-              }
-              ${card.isFlipped && !card.isMatched && flippedMemoryCards.includes(index) ? 'ring-2 ring-yellow-300' : ''}
-            `}
-          >
-            <span className="text-sm sm:text-base">
-                 {card.isFlipped ? card.content : '🔑'}
-            </span>
-          </button>
-        ))}
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-4 sm:gap-5 md:gap-6 max-w-xl sm:max-w-3xl mx-auto p-4 sm:p-6 bg-slate-900/30 rounded-lg border border-slate-700/50">
+        {memoryCards.map((card, index) => {
+          let cardStyle = {};
+          let contentStyle = {};
+          let cardClasses = `
+            w-20 h-24 sm:w-24 sm:h-28 md:w-28 md:h-32 p-2 rounded-lg shadow-xl transition-all duration-300 
+            flex items-center justify-center text-center border-2 
+            focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-cyan-400
+          `;
+
+          if (card.isMatched) {
+            cardClasses += ' bg-green-600/70 backdrop-blur-sm text-white border-green-500/80 opacity-80 cursor-default';
+            contentStyle = { textShadow: '0 0 6px #4ade80, 0 0 8px #22c55e99' }; 
+          } else if (card.isFlipped) {
+            cardClasses += ' bg-indigo-700/80 backdrop-blur-sm text-yellow-300 border-yellow-500/80 transform rotate-y-180';
+            contentStyle = { textShadow: '0 0 6px #facc15, 0 0 8px #eab30899' }; 
+            if (flippedMemoryCards.includes(index)) {
+              cardClasses += ' ring-2 ring-pink-400 border-pink-500/90 shadow-lg shadow-pink-500/30';
+            }
+          } else {
+            cardClasses += ' bg-slate-800 hover:bg-slate-700/80 text-cyan-300 border-slate-600 hover:border-purple-500/70';
+            contentStyle = { textShadow: '0 0 7px #06b6d4, 0 0 10px #0891b28c' }; 
+          }
+
+          return (
+            <button
+              key={card.id}
+              onClick={() => handleMemoryCardClick(index)}
+              disabled={card.isMatched && card.isFlipped}
+              className={cardClasses}
+              style={cardStyle}
+            >
+              <span className="text-xs sm:text-sm md:text-base" style={contentStyle}>
+                {card.isFlipped ? card.content : '🌌'}
+              </span>
+            </button>
+          );
+        })}
       </div>
     );
     return renderGameScreen("Jogo da Memória de Atalhos", memoryGameContent, memoryScore, ITEMS_PER_GAME);
@@ -250,10 +299,9 @@ const ShortcutDecoderGame: React.FC<ShortcutDecoderGameProps> = ({ onExit }) => 
 
   if (subGameMode === 'matching') {
     const matchingGameContent = (
-      <div className="flex flex-col sm:flex-row justify-around w-full max-w-4xl">
-        {/* Shortcuts Column */}
-        <div className="flex-1 p-2 sm:p-4">
-          <h3 className="text-xl font-semibold mb-3 text-center text-emerald-100">Atalhos</h3>
+      <div className="flex flex-col sm:flex-row justify-around w-full max-w-4xl gap-4 sm:gap-6 p-4 bg-slate-900/30 rounded-lg border border-slate-700/50">
+        <div className="flex-1 p-2 sm:p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+          <h3 className="text-xl font-semibold mb-3 text-center text-green-400" style={{textShadow:'0 0 4px rgba(74,222,128,0.5)'}}>Atalhos</h3>
           <div className="space-y-2">
             {matchShortcuts.map(item => (
               <button
@@ -261,10 +309,10 @@ const ShortcutDecoderGame: React.FC<ShortcutDecoderGameProps> = ({ onExit }) => 
                 onClick={() => handleMatchShortcutClick(item)}
                 disabled={item.isMatched}
                 className={`
-                  w-full p-3 rounded-md shadow-sm text-sm sm:text-base text-left transition-colors
-                  ${item.isMatched ? 'bg-emerald-700/70 text-emerald-300 line-through cursor-not-allowed' : 
-                   selectedMatchShortcut?.id === item.id ? 'bg-yellow-400 text-black ring-2 ring-white' : 
-                   'bg-emerald-600 hover:bg-emerald-500 text-white'}
+                  w-full p-3 rounded-md shadow-md text-sm sm:text-base text-left transition-all duration-150 border
+                  ${item.isMatched ? 'bg-green-800/70 text-green-400 line-through border-green-700 cursor-not-allowed opacity-60' : 
+                   selectedMatchShortcut?.id === item.id ? 'bg-yellow-500 text-slate-900 ring-2 ring-white border-yellow-400 shadow-lg transform scale-105' : 
+                   'bg-slate-700 hover:bg-slate-600 text-slate-100 border-slate-600 hover:shadow-md'}
                 `}
               >
                 {item.content}
@@ -272,9 +320,8 @@ const ShortcutDecoderGame: React.FC<ShortcutDecoderGameProps> = ({ onExit }) => 
             ))}
           </div>
         </div>
-        {/* Functions Column */}
-        <div className="flex-1 p-2 sm:p-4 mt-4 sm:mt-0">
-          <h3 className="text-xl font-semibold mb-3 text-center text-emerald-100">Funções</h3>
+        <div className="flex-1 p-2 sm:p-4 bg-slate-800/50 rounded-lg border border-slate-700 mt-4 sm:mt-0">
+          <h3 className="text-xl font-semibold mb-3 text-center text-purple-400" style={{textShadow:'0 0 4px rgba(192,132,252,0.5)'}}>Funções</h3>
           <div className="space-y-2">
             {matchFunctions.map(item => (
               <button
@@ -282,10 +329,10 @@ const ShortcutDecoderGame: React.FC<ShortcutDecoderGameProps> = ({ onExit }) => 
                 onClick={() => handleMatchFunctionClick(item)}
                 disabled={item.isMatched || !selectedMatchShortcut}
                 className={`
-                  w-full p-3 rounded-md shadow-sm text-sm sm:text-base text-left transition-colors
-                  ${item.isMatched ? 'bg-emerald-700/70 text-emerald-300 line-through cursor-not-allowed' :
-                   (!selectedMatchShortcut) ? 'bg-gray-500 text-gray-300 cursor-not-allowed' :
-                   'bg-emerald-600 hover:bg-emerald-500 text-white'}
+                  w-full p-3 rounded-md shadow-md text-sm sm:text-base text-left transition-all duration-150 border
+                  ${item.isMatched ? 'bg-green-800/70 text-green-400 line-through border-green-700 cursor-not-allowed opacity-60' :
+                   (!selectedMatchShortcut) ? 'bg-slate-600/50 text-slate-400 cursor-not-allowed border-slate-500' :
+                   'bg-slate-700 hover:bg-slate-600 text-slate-100 border-slate-600 hover:shadow-md'}
                 `}
               >
                 {item.content}
@@ -298,7 +345,7 @@ const ShortcutDecoderGame: React.FC<ShortcutDecoderGameProps> = ({ onExit }) => 
      return renderGameScreen("Combine Atalho e Função", matchingGameContent, matchingScore, ITEMS_PER_GAME);
   }
 
-  return <div>Carregando Jogo...</div>; // Fallback
+  return <div className="text-slate-400 animate-pulse">Carregando Jogo...</div>; 
 };
 
 export default ShortcutDecoderGame;

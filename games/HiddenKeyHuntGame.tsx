@@ -5,6 +5,7 @@ import { CHALLENGES_BY_PHASE, INITIAL_LIVES, CHALLENGES_PER_PHASE, shuffleArray 
 import VirtualKeyboard from '../components/VirtualKeyboard';
 import CheckIcon from '../components/icons/CheckIcon';
 import XIcon from '../components/icons/XIcon';
+import { playSound, SfxType } from '../audioManager';
 
 interface HiddenKeyHuntGameProps {
   onExit: () => void;
@@ -36,39 +37,32 @@ const HiddenKeyHuntGame: React.FC<HiddenKeyHuntGameProps> = ({ onExit }) => {
       if (currentPhase < Object.keys(CHALLENGES_BY_PHASE).length) {
         setCurrentPhase(prev => prev + 1);
         setChallengesCompletedInPhase(0);
-         // Ensure new challenges are loaded for the new phase
         const phaseChallenges = CHALLENGES_BY_PHASE[currentPhase + 1];
         if (phaseChallenges) {
             setAvailableChallenges(shuffleArray([...phaseChallenges]));
-            setCurrentChallenge(null); // Trigger selection of new challenge from new list
+            setCurrentChallenge(null); 
         } else {
-             // Should not happen if phases are well defined
             setIsGameOver(true);
             setFeedbackMessage("Erro: Fase não encontrada!");
         }
       } else {
         setFeedbackMessage("Parabéns! Você completou todos os desafios!");
+        playSound(SfxType.POSITIVE_FEEDBACK); // Overall win sound
         setIsGameOver(true);
       }
       return;
     }
     
-    // If still in the same phase, pick a new challenge
-    // Ensure availableChallenges has items before trying to pick one
     if (availableChallenges.length > 0) {
         const newChallengeIndex = Math.floor(Math.random() * availableChallenges.length);
         const nextChallengeItem = availableChallenges[newChallengeIndex];
         setCurrentChallenge(nextChallengeItem);
     } else if (challengesCompletedInPhase < CHALLENGES_PER_PHASE && currentPhase <= Object.keys(CHALLENGES_BY_PHASE).length) {
-        // Potentially ran out of unique challenges for this round but phase not complete
-        // Reload challenges for current phase to allow repeats if necessary
         const phaseChallenges = CHALLENGES_BY_PHASE[currentPhase];
         if (phaseChallenges) {
             setAvailableChallenges(shuffleArray([...phaseChallenges]));
-            // setCurrentChallenge will be set in the useEffect that watches availableChallenges
         }
     }
-
 
   }, [availableChallenges, currentPhase, challengesCompletedInPhase]);
 
@@ -76,8 +70,6 @@ const HiddenKeyHuntGame: React.FC<HiddenKeyHuntGameProps> = ({ onExit }) => {
     if(gameStarted && !isGameOver) {
         const phaseChallenges = CHALLENGES_BY_PHASE[currentPhase];
         if (phaseChallenges) {
-            // Only set new available challenges if they are different or empty
-            // This helps preserve the current set if nextChallenge is called mid-phase without advancing
             if(availableChallenges.length === 0 || currentChallenge === null ) {
                  setAvailableChallenges(shuffleArray([...phaseChallenges]));
             }
@@ -86,7 +78,6 @@ const HiddenKeyHuntGame: React.FC<HiddenKeyHuntGameProps> = ({ onExit }) => {
   }, [currentPhase, gameStarted, isGameOver, availableChallenges.length, currentChallenge]);
   
   useEffect(() => {
-    // If game started, not over, challenges are available, but no current challenge is set (e.g. after phase change)
     if(gameStarted && !isGameOver && availableChallenges.length > 0 && !currentChallenge) {
         nextChallenge();
     }
@@ -94,6 +85,7 @@ const HiddenKeyHuntGame: React.FC<HiddenKeyHuntGameProps> = ({ onExit }) => {
 
 
   const handleCorrect = useCallback(() => {
+    playSound(SfxType.POSITIVE_FEEDBACK);
     setScore(s => s + 10);
     setFeedback('correct');
     setFeedbackMessage('Correto!');
@@ -102,6 +94,7 @@ const HiddenKeyHuntGame: React.FC<HiddenKeyHuntGameProps> = ({ onExit }) => {
   }, [nextChallenge]);
 
   const handleIncorrect = useCallback(() => {
+    playSound(SfxType.NEGATIVE_FEEDBACK);
     const newLives = lives - 1;
     setLives(newLives);
     setFeedback('incorrect');
@@ -118,7 +111,6 @@ const HiddenKeyHuntGame: React.FC<HiddenKeyHuntGameProps> = ({ onExit }) => {
             setFeedback('neutral');
             setFeedbackMessage('');
         }
-        // Only reset userInput for terms, as key/combo inputs are not accumulated in userInput state.
         if (currentChallenge && currentChallenge.type === 'term') {
             setUserInput(''); 
         }
@@ -142,9 +134,6 @@ const HiddenKeyHuntGame: React.FC<HiddenKeyHuntGameProps> = ({ onExit }) => {
       const keyPressDetails = expected as KeyPressExpected;
 
       if (type === 'combo' && MODIFIER_KEYS.includes(event.key)) {
-        // If it's a combo challenge and a modifier key itself is pressed,
-        // do nothing yet. Wait for the non-modifier key.
-        // The virtual keyboard will show the modifier as pressed.
         return;
       }
 
@@ -192,32 +181,39 @@ const HiddenKeyHuntGame: React.FC<HiddenKeyHuntGameProps> = ({ onExit }) => {
     }
   }, [checkAnswer, isGameOver, gameStarted]); 
 
-  const startGame = () => {
+  const handleStartGameClick = () => {
+    playSound(SfxType.UI_CLICK);
+    playSound(SfxType.GAME_START);
     setIsGameOver(false);
     setScore(0);
     setLives(INITIAL_LIVES);
     setCurrentPhase(1);
     setChallengesCompletedInPhase(0);
     setCurrentChallenge(null); 
-    setAvailableChallenges([]); // Clear available challenges so they are reloaded for phase 1
+    setAvailableChallenges([]); 
     setGameStarted(true);
     setFeedback('neutral');
     setFeedbackMessage('O jogo começou! Boa sorte!');
   };
   
+  const handleExitClick = () => {
+    // playSound(SfxType.UI_CLICK); // This is handled by App.tsx
+    onExit();
+  }
+  
   if (!gameStarted) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-tr from-teal-400 to-blue-600 p-6 text-white custom-font-comic">
-        <div className="bg-white/20 backdrop-blur-md p-10 rounded-xl shadow-2xl text-center">
-          <h2 className="text-4xl font-bold mb-6">Caça às Teclas Escondidas</h2>
-          <p className="mb-8 text-lg">Prepare-se para testar seus conhecimentos sobre o teclado e programação!</p>
+      <div className="flex flex-col items-center justify-center min-h-screen p-6 text-slate-100 custom-font-comic">
+        <div className="bg-slate-800/70 backdrop-blur-md p-10 rounded-xl shadow-2xl text-center border border-slate-700/50">
+          <h2 className="text-4xl font-bold mb-6 text-cyan-400" style={{ textShadow: '0 0 6px theme("colors.cyan.500 / 60%")' }}>Caça às Teclas Escondidas</h2>
+          <p className="mb-8 text-lg text-slate-300">Prepare-se para testar seus conhecimentos sobre o teclado e programação!</p>
           <button
-            onClick={startGame}
-            className="px-8 py-4 bg-orange-500 text-white text-2xl font-semibold rounded-lg shadow-md hover:bg-orange-600 transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-orange-300"
+            onClick={handleStartGameClick}
+            className="px-8 py-4 bg-green-600 text-white text-2xl font-semibold rounded-lg shadow-md hover:bg-green-500 transition-all transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-green-700 focus:ring-opacity-50"
           >
             Começar Jogo!
           </button>
-           <button onClick={onExit} className="mt-4 block mx-auto px-6 py-2 bg-slate-500 text-white text-lg rounded-md hover:bg-slate-600 transition">Voltar</button>
+           <button onClick={handleExitClick} className="mt-6 block mx-auto px-6 py-2 bg-slate-600 text-slate-200 text-lg rounded-md hover:bg-slate-500 transition">Voltar</button>
         </div>
       </div>
     );
@@ -225,46 +221,54 @@ const HiddenKeyHuntGame: React.FC<HiddenKeyHuntGameProps> = ({ onExit }) => {
 
 
   return (
-    <div className="flex flex-col items-center min-h-screen bg-gradient-to-br from-blue-300 via-indigo-400 to-purple-500 p-4 custom-font-comic text-white">
-      <header className="w-full max-w-4xl p-4 bg-white/20 backdrop-blur-md rounded-lg shadow-lg mb-6 flex justify-between items-center">
+    <div className="flex flex-col items-center min-h-screen p-4 custom-font-comic text-slate-100">
+      <header className="w-full max-w-4xl p-4 bg-slate-800/60 backdrop-blur-sm rounded-lg shadow-xl mb-6 flex justify-between items-center border border-slate-700/50">
         <div>
-          <h1 className="text-3xl font-bold text-indigo-100">Fase: {currentPhase}</h1>
-          <p className="text-indigo-200">Desafios Completos na Fase: {challengesCompletedInPhase} / {CHALLENGES_PER_PHASE}</p>
+          <h1 className="text-3xl font-bold text-cyan-400" style={{ textShadow: '0 0 5px theme("colors.cyan.500 / 50%")' }}>Fase: {currentPhase}</h1>
+          <p className="text-slate-300">Desafios na Fase: {challengesCompletedInPhase} / {CHALLENGES_PER_PHASE}</p>
         </div>
         <div className="text-right">
-          <p className="text-2xl font-semibold">Pontos: <span className="text-yellow-300">{score}</span></p>
-          <p className="text-xl">Vidas: <span className="text-red-300">{'❤️'.repeat(lives)}</span></p>
+          <p className="text-2xl font-semibold">Pontos: <span className="text-yellow-300" style={{ textShadow: '0 0 4px theme("colors.yellow.400 / 70%")' }}>{score}</span></p>
+          <p className="text-xl">Vidas: <span className="text-red-400 drop-shadow-[0_0_3px_rgba(248,113,113,0.7)]">{'❤️'.repeat(lives)}</span></p>
         </div>
       </header>
 
       {isGameOver ? (
-        <div className="flex flex-col items-center justify-center bg-white/30 backdrop-blur-lg p-8 rounded-xl shadow-xl text-center">
-          <h2 className="text-5xl font-bold mb-4">{lives > 0 ? "🎉 Você Venceu! 🎉" : "😭 Fim de Jogo! 😭"}</h2>
-          <p className="text-3xl mb-2">Sua pontuação final: <span className="font-bold text-yellow-300">{score}</span></p>
-          { lives === 0 && <p className="text-xl mb-6">{feedbackMessage}</p> }
-          { lives > 0 && <p className="text-xl mb-6">{feedbackMessage}</p> }
-          <button
-            onClick={startGame}
-            className="mt-4 px-8 py-3 bg-green-500 text-white text-xl font-semibold rounded-lg shadow-md hover:bg-green-600 transition mr-4"
-          >
-            Jogar Novamente
-          </button>
-          <button onClick={onExit} className="mt-4 px-8 py-3 bg-slate-600 text-white text-xl font-semibold rounded-lg shadow-md hover:bg-slate-700 transition">Sair</button>
+        <div className="flex flex-col items-center justify-center bg-slate-800/70 backdrop-blur-md p-8 rounded-xl shadow-2xl text-center border border-slate-700/50">
+          <h2 className="text-5xl font-bold mb-4" style={{ textShadow: lives > 0 ? '0 0 8px theme("colors.green.400 / 70%")' : '0 0 8px theme("colors.red.400 / 70%")' }}>
+            {lives > 0 ? "🎉 Você Venceu! 🎉" : "😭 Fim de Jogo! 😭"}
+          </h2>
+          <p className="text-3xl mb-2 text-slate-200">Sua pontuação final: <span className="font-bold text-yellow-300" style={{ textShadow: '0 0 4px theme("colors.yellow.400 / 70%")' }}>{score}</span></p>
+          <p className="text-xl mb-6 text-slate-300">{feedbackMessage}</p>
+          <div className="flex gap-4 mt-4">
+            <button
+              onClick={handleStartGameClick}
+              className="px-8 py-3 bg-green-600 text-white text-xl font-semibold rounded-lg shadow-md hover:bg-green-500 transition-all transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-green-700 focus:ring-opacity-50"
+            >
+              Jogar Novamente
+            </button>
+            <button onClick={handleExitClick} className="px-8 py-3 bg-slate-600 text-slate-200 text-xl font-semibold rounded-lg shadow-md hover:bg-slate-500 transition-all transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-slate-700 focus:ring-opacity-50">
+              Sair
+            </button>
+          </div>
         </div>
       ) : currentChallenge ? (
-        <div className="w-full max-w-3xl p-6 bg-white/25 backdrop-blur-md rounded-xl shadow-lg text-center mb-6">
-          <p className="text-lg text-indigo-100 mb-1">Pressione a tecla ou digite o termo:</p>
-          <div className="text-5xl font-bold my-6 p-4 bg-white/30 rounded-md text-yellow-300 tracking-wider min-h-[80px] flex items-center justify-center">
+        <div className="w-full max-w-3xl p-6 bg-slate-800/60 backdrop-blur-sm rounded-xl shadow-xl text-center mb-6 border border-slate-700/50">
+          <p className="text-lg text-slate-300 mb-2">Pressione a tecla ou digite o termo:</p>
+          <div 
+            className="text-5xl font-bold my-6 p-4 bg-slate-900/70 rounded-md text-yellow-300 tracking-wider min-h-[80px] flex items-center justify-center border border-slate-700"
+            style={{ textShadow: '0 0 8px theme("colors.yellow.400 / 50%")' }}
+          >
             {currentChallenge.type === 'term' ? userInput || currentChallenge.display : currentChallenge.display}
           </div>
           {currentChallenge.description && (
-            <p className="text-md text-indigo-200 mb-2">(Função: {currentChallenge.description})</p>
+            <p className="text-md text-slate-400 mb-2">(Função: {currentChallenge.description})</p>
           )}
           
-          <div className={`mt-4 p-3 rounded-md text-xl h-12 flex items-center justify-center transition-all duration-300
-            ${feedback === 'correct' ? 'bg-green-500/80' : ''}
-            ${feedback === 'incorrect' ? 'bg-red-500/80' : ''}
-            ${feedback === 'neutral' && feedbackMessage ? 'bg-sky-500/80' : ''}
+          <div className={`mt-4 p-3 rounded-md text-xl h-12 flex items-center justify-center transition-all duration-300 border
+            ${feedback === 'correct' ? 'bg-green-500/80 border-green-400/80 text-white' : ''}
+            ${feedback === 'incorrect' ? 'bg-red-500/80 border-red-400/80 text-white' : ''}
+            ${feedback === 'neutral' && feedbackMessage ? 'bg-sky-600/80 border-sky-500/80 text-white' : 'border-transparent'}
           `}>
             {feedback === 'correct' && <CheckIcon className="w-7 h-7 mr-2"/>}
             {feedback === 'incorrect' && <XIcon className="w-7 h-7 mr-2"/>}
@@ -272,14 +276,14 @@ const HiddenKeyHuntGame: React.FC<HiddenKeyHuntGameProps> = ({ onExit }) => {
           </div>
         </div>
       ) : (
-         <div className="w-full max-w-3xl p-6 bg-white/25 backdrop-blur-md rounded-xl shadow-lg text-center mb-6 min-h-[200px] flex items-center justify-center">
-            <p className="text-3xl text-indigo-100">Carregando desafio...</p>
+         <div className="w-full max-w-3xl p-6 bg-slate-800/60 backdrop-blur-sm rounded-xl shadow-xl text-center mb-6 min-h-[200px] flex items-center justify-center border border-slate-700/50">
+            <p className="text-3xl text-slate-400 animate-pulse">Carregando desafio...</p>
          </div>
       )}
 
       {!isGameOver && <VirtualKeyboard targetKeys={currentChallenge?.keysToHighlight || []} pressedKey={pressedKeyForKeyboard} />}
       
-      {!isGameOver && <button onClick={onExit} className="mt-8 px-6 py-2 bg-slate-200/70 text-slate-800 text-lg rounded-md hover:bg-slate-100/90 transition">Voltar ao Menu</button>}
+      {!isGameOver && <button onClick={handleExitClick} className="mt-8 px-6 py-2 bg-slate-700/80 text-slate-300 text-lg rounded-md hover:bg-slate-600/80 transition focus:outline-none focus:ring-2 focus:ring-slate-500">Voltar ao Menu</button>}
     </div>
   );
 };

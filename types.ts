@@ -180,4 +180,3 @@ export interface PlayerState {
   activeInteraction?: InteractionProperties | null; // The interaction currently being prompted/processed
   interactionCell?: MapCell | null; // The cell being interacted with
 }
-

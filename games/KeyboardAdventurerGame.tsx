@@ -7,7 +7,7 @@ import {
   InteractionProperties,
   ItemDefinition,
   PlayerSubState,
-  TileType,
+  // TileType, // Not directly used here, but through constants
 } from '../types';
 import {
   INITIAL_GAME_MAP_LAYOUT,
@@ -20,7 +20,7 @@ import {
   ITEMS_DATA,
 } from '../constants';
 import CheckIcon from '../components/icons/CheckIcon';
-import XIcon from '../components/icons/XIcon';
+import { playSound, SfxType } from '../audioManager';
 
 interface KeyboardAdventurerGameProps {
   onExit: () => void;
@@ -44,10 +44,14 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
 
   const commandInputRef = useRef<HTMLInputElement>(null);
 
-  const addMessageToLog = useCallback((message: string) => {
+  const addMessageToLog = useCallback((message: string, isFeedbackPositive?: boolean) => {
+    if (isFeedbackPositive === true) playSound(SfxType.POSITIVE_FEEDBACK);
+    else if (isFeedbackPositive === false) playSound(SfxType.NEGATIVE_FEEDBACK);
+    // Neutral messages (no sound explicitly) or handled by specific action sounds
+
     setPlayerState(prev => ({
       ...prev,
-      messageLog: [...prev.messageLog.slice(-4), message], // Keep last 5 messages
+      messageLog: [...prev.messageLog.slice(-4), message], 
       subState: 'SHOWING_MESSAGE',
     }));
   }, []);
@@ -61,7 +65,7 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
           ...definition,
           x,
           y,
-          instanceId: `${definition.id}_${x},${y}`, // Unique ID for this cell on the map
+          instanceId: `${definition.id}_${x},${y}`, 
         };
       })
     );
@@ -78,7 +82,8 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
     });
   }, []);
   
-  const startGame = () => {
+  const handleActualStartGame = () => {
+    playSound(SfxType.GAME_START);
     initializeMap();
     setGameStatus('playing');
   };
@@ -93,11 +98,9 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
   const handlePlayerMove = useCallback((dx: number, dy: number) => {
     if (gameStatus !== 'playing' || playerState.subState === 'AWAITING_COMMAND_INPUT' || mapData.length === 0) return;
 
-    // Clear previous interaction prompt if player moves away
     if (playerState.subState === 'AWAITING_INTERACTION_PROMPT') {
         setPlayerState(prev => ({...prev, subState: 'IDLE', activeInteraction: null, interactionCell: null}));
     }
-
 
     let newDirection: PlayerDirection = playerState.direction;
     if (dx === 1) newDirection = 'right';
@@ -111,17 +114,15 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
     if (newY >= 0 && newY < mapData.length && newX >= 0 && newX < mapData[0].length) {
       const targetCell = mapData[newY][newX];
       if (targetCell.walkable) {
+        // playSound(SfxType.PLAYER_STEP); // If we add step sounds
         setPlayerState(prev => ({ ...prev, position: { x: newX, y: newY }, direction: newDirection }));
         
-        // Check for messages or auto-interactions on the new cell
         if (targetCell.messageOnStep && playerState.subState !== 'SHOWING_MESSAGE') {
-          addMessageToLog(targetCell.messageOnStep);
+          addMessageToLog(targetCell.messageOnStep); // Neutral message
         }
-        // Future: Auto-trigger interactions if any ('autoWithItem')
       } else {
-        // Bumped into a non-walkable tile, just update direction
+        // playSound(SfxType.BUMP_WALL); // If we add bump sounds
         setPlayerState(prev => ({ ...prev, direction: newDirection }));
-        // Optional: add a "bump" sound or message
       }
     }
   }, [mapData, playerState.position, playerState.direction, playerState.subState, gameStatus, addMessageToLog]);
@@ -146,34 +147,40 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
   }, [playerState.position, playerState.direction, mapData]);
 
 
-  const processInteraction = useCallback(() => {
+  const processInteractionLogic = useCallback(() => {
     if (!playerState.activeInteraction || !playerState.interactionCell || gameStatus !== 'playing') return;
 
     const interaction = playerState.activeInteraction;
     const cell = playerState.interactionCell;
     let success = false;
+    let feedbackPositive: boolean | undefined = undefined;
 
     if (interaction.type === 'keyPress' && playerState.commandBuffer === interaction.expectedInput) {
         if (interaction.requiredItemId) {
             if (playerState.inventory.some(item => item.id === interaction.requiredItemId)) {
                 success = true;
+                feedbackPositive = true;
             } else {
-                addMessageToLog(interaction.failureMessage || "Você não pode fazer isso agora.");
+                addMessageToLog(interaction.failureMessage || "Você não pode fazer isso agora.", false);
+                feedbackPositive = false;
             }
         } else {
             success = true;
+            feedbackPositive = true;
         }
     } else if (interaction.type === 'command' && playerState.commandBuffer.toLowerCase() === interaction.expectedInput?.toLowerCase()) {
         success = true;
-    } else if (interaction.type === 'command') { // Incorrect command
-        addMessageToLog(interaction.failureMessage || "Comando incorreto.");
+        feedbackPositive = true;
+    } else if (interaction.type === 'command') { 
+        addMessageToLog(interaction.failureMessage || "Comando incorreto.", false);
+        feedbackPositive = false;
     }
 
 
     if (success) {
         const result = interaction.successResult;
         let newInventory = [...playerState.inventory];
-        let newMap = mapData.map(row => row.map(c => ({ ...c }))); // Deep copy map
+        let newMap = mapData.map(row => row.map(c => ({ ...c }))); 
 
         if (result.giveItemId) {
             const itemToAdd = ITEMS_DATA[result.giveItemId];
@@ -181,22 +188,21 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
                 newInventory.push(itemToAdd);
             }
         }
-        if (result.removeItemId && interaction.consumesItem) { // Ensure consumesItem is checked for requiredItemId
-            // The item to remove should be the one specified by requiredItemId if consumesItem is true
+        if (result.removeItemId && interaction.consumesItem) { 
             const itemToRemove = interaction.requiredItemId || result.removeItemId;
             if (itemToRemove) {
                  newInventory = newInventory.filter(item => item.id !== itemToRemove);
             }
         }
         if (result.changeTileTo) {
-            const targetCellId = result.changeTileTo.targetCellId || cell.instanceId; // Default to current cell if not specified
+            const targetCellId = result.changeTileTo.targetCellId || cell.instanceId; 
             let changed = false;
             for (let r = 0; r < newMap.length; r++) {
                 for (let c = 0; c < newMap[r].length; c++) {
                     if (newMap[r][c].instanceId === targetCellId) {
                         const newDef = MAP_CELL_DEFINITIONS[result.changeTileTo.newTileId];
                         if (newDef) {
-                           newMap[r][c] = { ...newDef, x:c, y:r, instanceId: `${newDef.id}_${c},${r}` }; // Update cell with new definition
+                           newMap[r][c] = { ...newDef, x:c, y:r, instanceId: `${newDef.id}_${c},${r}` }; 
                            changed = true;
                            break;
                         }
@@ -208,11 +214,16 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
         }
 
         if (result.displayMessage) {
-            addMessageToLog(result.displayMessage);
+            addMessageToLog(result.displayMessage, feedbackPositive); // Use determined feedback
+        } else if (feedbackPositive) { // Generic success if no message but action was positive
+            playSound(SfxType.POSITIVE_FEEDBACK);
         }
+        
         if (result.winGame) {
+            playSound(SfxType.POSITIVE_FEEDBACK); // Game win sound
             setGameStatus('won');
         } else if (result.loseGame) {
+            playSound(SfxType.NEGATIVE_FEEDBACK); // Game lose sound
             setGameStatus('lost');
         }
         
@@ -225,18 +236,12 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
             interactionCell: null,
         }));
 
-    } else if (interaction.type === 'keyPress' && playerState.commandBuffer !== interaction.expectedInput) {
-        // This case for failed keyPress (e.g. wrong key for a non-Enter prompt) is tricky.
-        // Usually, failure for keyPress is due to missing item, which is handled above.
-        // If it's just "wrong key pressed for a prompt", it's often ignored or implicitly fails by not matching.
-        // No specific message here unless it's a puzzle.
     }
     
-    // Reset commandBuffer unless we are still awaiting command for the *same* interaction after a failure
     if (!success && playerState.activeInteraction?.type === 'command') {
-        // Keep command buffer for re-try if command failed
-    } else {
-        setPlayerState(prev => ({ ...prev, commandBuffer: ''}));
+       setPlayerState(prev => ({ ...prev, commandBuffer: ''})); 
+    } else if (!success) {
+       setPlayerState(prev => ({ ...prev, commandBuffer: ''}));
     }
 
     if (!success && playerState.subState !== 'SHOWING_MESSAGE') { 
@@ -246,7 +251,7 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
   }, [playerState, mapData, gameStatus, addMessageToLog]);
 
 
-  const handleKeyPress = useCallback((event: KeyboardEvent) => {
+  const handleKeyPressLogic = useCallback((event: KeyboardEvent) => {
     if (gameStatus !== 'playing' || mapData.length === 0) return;
 
     event.preventDefault(); 
@@ -255,6 +260,7 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
 
     if (currentSubState === 'SHOWING_MESSAGE') {
         if (event.key === 'Enter' || event.key === 'Escape' || event.key === ' ') {
+            playSound(SfxType.UI_CLICK);
             setPlayerState(prev => ({ ...prev, subState: 'IDLE', activeInteraction: null, interactionCell: null }));
         }
         return;
@@ -262,19 +268,20 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
     
     if (currentSubState === 'AWAITING_COMMAND_INPUT') {
         if (event.key === 'Enter') {
-            processInteraction(); 
+            playSound(SfxType.UI_CLICK);
+            processInteractionLogic(); 
         } else if (event.key === 'Escape') {
+            playSound(SfxType.UI_CLICK);
             setPlayerState(prev => ({ ...prev, subState: 'IDLE', commandBuffer: '', activeInteraction: null, interactionCell: null }));
             addMessageToLog("Comando cancelado.");
         } else if (event.key === 'Backspace') {
             setPlayerState(prev => ({ ...prev, commandBuffer: prev.commandBuffer.slice(0, -1) }));
-        } else if (event.key.length === 1) { 
+        } else if (event.key.length === 1 && playerState.commandBuffer.length < 50) { 
             setPlayerState(prev => ({ ...prev, commandBuffer: prev.commandBuffer + event.key }));
         }
         return;
     }
 
-    // IDLE or AWAITING_INTERACTION_PROMPT states for movement and initiating interaction
     switch (event.key) {
       case 'ArrowUp': handlePlayerMove(0, -1); break;
       case 'ArrowDown': handlePlayerMove(0, 1); break;
@@ -284,7 +291,7 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
         const currentActiveInteraction = playerState.activeInteraction;
         if (currentActiveInteraction && currentActiveInteraction.type === 'keyPress' && currentActiveInteraction.expectedInput === 'Enter') {
              setPlayerState(prev => ({...prev, commandBuffer: 'Enter'})); 
-             processInteraction(); 
+             processInteractionLogic(); 
         } else {
             const cellToInteract = getFacingCell() || mapData[playerState.position.y][playerState.position.x];
             if (cellToInteract && cellToInteract.interactionId) {
@@ -299,12 +306,11 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
 
                     if (interactionDef.type === 'command') {
                         setPlayerState(prev => ({...prev, subState: 'AWAITING_COMMAND_INPUT' }));
-                        // Display prompt via message log or a dedicated prompt area
                         addMessageToLog(interactionDef.commandPrompt || "Digite o comando:");
                     } else if (interactionDef.type === 'keyPress') {
                         if (interactionDef.expectedInput === 'Enter') {
                              setPlayerState(prev => ({...prev, commandBuffer: 'Enter'}));
-                             processInteraction(); 
+                             processInteractionLogic(); 
                         } else {
                             setPlayerState(prev => ({...prev, subState: 'AWAITING_INTERACTION_PROMPT' }));
                             addMessageToLog(interactionDef.promptMessage || `Pressione ${interactionDef.expectedInput} para interagir.`);
@@ -318,37 +324,45 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
         break;
       default:
         if (playerState.activeInteraction && playerState.activeInteraction.type === 'keyPress' && event.key.toLowerCase() === playerState.activeInteraction.expectedInput?.toLowerCase()) {
-            setPlayerState(prev => ({...prev, commandBuffer: event.key})); // Use actual event.key
-            processInteraction();
+            setPlayerState(prev => ({...prev, commandBuffer: event.key})); 
+            processInteractionLogic();
         }
         break;
     }
-  }, [gameStatus, playerState, handlePlayerMove, getFacingCell, mapData, processInteraction, addMessageToLog]);
+  }, [gameStatus, playerState, handlePlayerMove, getFacingCell, mapData, processInteractionLogic, addMessageToLog]);
 
   useEffect(() => {
     if (gameStatus === 'playing') {
-      window.addEventListener('keydown', handleKeyPress);
+      window.addEventListener('keydown', handleKeyPressLogic);
       return () => {
-        window.removeEventListener('keydown', handleKeyPress);
+        window.removeEventListener('keydown', handleKeyPressLogic);
       };
     }
-  }, [handleKeyPress, gameStatus]);
+  }, [handleKeyPressLogic, gameStatus]);
 
+  const handleStartButtonClick = () => {
+    playSound(SfxType.UI_CLICK);
+    handleActualStartGame();
+  };
 
-  // Render logic
+  const handleExitClick = () => {
+    // playSound(SfxType.UI_CLICK); // Handled by App.tsx
+    onExit();
+  }
+
   if (gameStatus === 'idle') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-tr from-gray-700 via-gray-800 to-black p-6 text-white custom-font-comic">
-        <div className="bg-white/10 backdrop-blur-md p-10 rounded-xl shadow-2xl text-center">
-          <h2 className="text-4xl font-bold mb-6">Teclado Aventureiro</h2>
-          <p className="mb-8 text-lg">Explore, interaja e use comandos para vencer!</p>
+      <div className="flex flex-col items-center justify-center min-h-screen p-6 text-slate-100 custom-font-comic">
+        <div className="bg-slate-800/70 backdrop-blur-md p-10 rounded-xl shadow-2xl text-center border border-slate-700/50">
+          <h2 className="text-4xl font-bold mb-6 text-cyan-400" style={{ textShadow: '0 0 6px theme("colors.cyan.500 / 60%")' }}>Teclado Aventureiro</h2>
+          <p className="mb-8 text-lg text-slate-300">Explore, interaja e use comandos para vencer!</p>
           <button
-            onClick={startGame}
-            className="px-8 py-4 bg-purple-600 text-white text-2xl font-semibold rounded-lg shadow-md hover:bg-purple-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-purple-400"
+            onClick={handleStartButtonClick}
+            className="px-8 py-4 bg-purple-600 text-white text-2xl font-semibold rounded-lg shadow-md hover:bg-purple-500 transition-all transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-purple-700 focus:ring-opacity-50"
           >
             Começar Aventura!
           </button>
-          <button onClick={onExit} className="mt-4 block mx-auto px-6 py-2 bg-slate-500/70 text-white text-lg rounded-md hover:bg-slate-600/70 transition">Voltar ao Menu</button>
+          <button onClick={handleExitClick} className="mt-6 block mx-auto px-6 py-2 bg-slate-600 text-slate-200 text-lg rounded-md hover:bg-slate-500 transition">Voltar ao Menu</button>
         </div>
       </div>
     );
@@ -356,45 +370,59 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
 
   if (gameStatus === 'won' || gameStatus === 'lost') {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-yellow-400 to-orange-600 p-6 text-white custom-font-comic">
-        <div className="bg-white/30 backdrop-blur-lg p-8 rounded-xl shadow-xl text-center">
-          <h2 className="text-5xl font-bold mb-4">
+      <div className="flex flex-col items-center justify-center min-h-screen p-6 text-slate-100 custom-font-comic">
+        <div className="bg-slate-800/70 backdrop-blur-md p-8 rounded-xl shadow-2xl text-center border border-slate-700/50">
+          <h2 className="text-5xl font-bold mb-4" style={{ textShadow: gameStatus === 'won' ? '0 0 8px theme("colors.green.400 / 70%")' : '0 0 8px theme("colors.red.400 / 70%")' }}>
             {gameStatus === 'won' ? `🎉 Você Venceu a Aventura! 🎉` : `😭 Fim de Jogo! 😭`}
           </h2>
-          <p className="text-3xl mb-6">{playerState.messageLog.slice(-1)[0] || (gameStatus === 'won' ? "Parabéns!" : "Tente novamente!")}</p>
-          <button
-            onClick={startGame}
-            className="mt-4 px-8 py-3 bg-green-500 text-white text-xl font-semibold rounded-lg shadow-md hover:bg-green-600 transition mr-4"
-          >
-            Jogar Novamente
-          </button>
-          <button onClick={onExit} className="mt-4 px-8 py-3 bg-slate-600 text-white text-xl font-semibold rounded-lg shadow-md hover:bg-slate-700 transition">Sair</button>
+          <p className="text-3xl mb-6 text-slate-200">{playerState.messageLog.slice(-1)[0] || (gameStatus === 'won' ? "Parabéns!" : "Tente novamente!")}</p>
+          <div className="flex gap-4 mt-4">
+            <button
+              onClick={handleStartButtonClick}
+              className="px-8 py-3 bg-green-600 text-white text-xl font-semibold rounded-lg shadow-md hover:bg-green-500 transition-all transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-green-700 focus:ring-opacity-50"
+            >
+              Jogar Novamente
+            </button>
+            <button onClick={handleExitClick} className="px-8 py-3 bg-slate-600 text-slate-200 text-xl font-semibold rounded-lg shadow-md hover:bg-slate-500 transition-all transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-slate-700 focus:ring-opacity-50">
+              Sair
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Playing state
   const renderMap = () => {
-    if (mapData.length === 0 || mapData[0].length === 0) return <p>Carregando mapa...</p>;
+    if (mapData.length === 0 || mapData[0].length === 0) return <p className="text-slate-400 animate-pulse">Carregando mapa...</p>;
     return (
-      <div className="grid border-2 border-slate-600 bg-slate-800 shadow-lg" style={{ gridTemplateColumns: `repeat(${mapData[0].length}, 2rem)`}}>
-        {mapData.flat().map((cell) => ( // Removed index as key was cell.instanceId
+      <div className="grid border-2 border-slate-700 bg-slate-900 shadow-2xl rounded-md overflow-hidden" style={{ gridTemplateColumns: `repeat(${mapData[0].length}, 2rem)`, fontFamily: 'monospace', fontSize: '1.25rem' }}>
+        {mapData.flat().map((cell) => (
           <div
             key={cell.instanceId}
-            className="w-8 h-8 flex items-center justify-center text-lg border border-slate-700"
+            className="w-8 h-8 flex items-center justify-center border border-slate-800"
             title={`(${cell.x}, ${cell.y}) - ${cell.tileType}`}
+            style={{
+                backgroundColor: (playerState.position.x === cell.x && playerState.position.y === cell.y) ? 'transparent' : 
+                                 cell.tileType === 'WALL' ? 'rgba(51, 65, 85, 0.7)' : 
+                                 'rgba(30, 41, 59, 0.5)', 
+                color: cell.display === PLAYER_AVATAR_DISPLAY ? 'white' : 
+                       cell.tileType === 'KEY_GOLD' ? 'gold' : 
+                       cell.tileType === 'DOOR_LOCKED_GOLD' ? 'gold' : 
+                       cell.tileType === 'NPC_QUEST_GIVER' ? 'cyan' :
+                       cell.tileType === 'EXIT_PORTAL' ? 'magenta' :
+                       '#94A3B8' 
+            }}
           >
             {playerState.position.x === cell.x && playerState.position.y === cell.y
-              ? PLAYER_AVATAR_DISPLAY
-              : cell.display}
+              ? <span style={{filter: 'drop-shadow(0 0 3px white)'}}>{PLAYER_AVATAR_DISPLAY}</span>
+              : <span style={{filter: cell.tileType.includes('ITEM') || cell.tileType.includes('KEY') || cell.tileType === 'EXIT_PORTAL' ? `drop-shadow(0 0 4px ${cell.display === '🔑' ? 'gold' : 'cyan'})` : 'none'}}>{cell.display}</span>}
           </div>
         ))}
       </div>
     );
   };
   
-  const getInteractionHint = () => { // Renamed from getInteractionPrompt to avoid confusion with interaction's own promptMessage
+  const getInteractionHint = () => { 
     const facingCell = getFacingCell();
     const currentCell = mapData.length > 0 ? mapData[playerState.position.y]?.[playerState.position.x] : null;
     
@@ -402,7 +430,7 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
     
     if (facingCell?.interactionId) {
         cellForPotentialInteraction = facingCell;
-    } else if (currentCell?.interactionId && currentCell.walkable) {
+    } else if (currentCell?.interactionId && currentCell.walkable) { 
         cellForPotentialInteraction = currentCell;
     }
 
@@ -417,41 +445,38 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
 
 
   return (
-    <div className="flex flex-col lg:flex-row items-start justify-center min-h-screen bg-gradient-to-b from-slate-800 via-slate-900 to-black p-4 custom-font-comic text-slate-200 gap-4">
-      {/* Left Panel: Map and Controls */}
+    <div className="flex flex-col lg:flex-row items-start justify-center min-h-screen p-4 custom-font-comic text-slate-200 gap-4">
       <div className="flex-grow flex flex-col items-center lg:items-end w-full lg:w-auto">
-        <h1 className="text-3xl font-bold text-purple-400 mb-4">Teclado Aventureiro</h1>
+        <h1 className="text-3xl font-bold text-purple-400 mb-4" style={{textShadow: '0 0 6px theme("colors.purple.500 / 60%")'}}>Teclado Aventureiro</h1>
         {renderMap()}
-        <div className="mt-4 p-3 bg-slate-700/50 rounded-md shadow w-full max-w-md text-sm text-center">
-            Use as <span className="text-yellow-400 font-semibold">Setas</span> para mover. <span className="text-yellow-400 font-semibold">Enter</span> para interagir.
-            { getInteractionHint() && <p className="mt-1 text-purple-300 animate-pulse">{getInteractionHint()}</p>}
+        <div className="mt-4 p-3 bg-slate-800/70 backdrop-blur-sm rounded-md shadow-lg w-full max-w-md text-sm text-center border border-slate-700/50">
+            Use as <span className="text-yellow-300 font-semibold">Setas</span> para mover. <span className="text-yellow-300 font-semibold">Enter</span> para interagir.
+            { getInteractionHint() && <p className="mt-1 text-cyan-300 animate-pulse">{getInteractionHint()}</p>}
         </div>
       </div>
 
-      {/* Right Panel: Messages, Inventory, Command Input */}
-      <div className="w-full lg:w-96 bg-slate-800/70 backdrop-blur-sm p-4 rounded-lg shadow-xl flex flex-col gap-4">
-        {/* Message Log */}
+      <div className="w-full lg:w-96 bg-slate-800/70 backdrop-blur-sm p-4 rounded-lg shadow-xl flex flex-col gap-4 border border-slate-700/50">
         <div>
           <h3 className="text-lg font-semibold text-purple-300 mb-1 border-b border-slate-700 pb-1">Mensagens:</h3>
-          <div className="h-32 bg-black/30 p-2 rounded text-sm overflow-y-auto flex flex-col-reverse">
+          <div className="h-32 bg-black/40 p-2 rounded text-sm overflow-y-auto flex flex-col-reverse border border-slate-700/50 shadow-inner">
             {playerState.messageLog.length === 0 && <p className="text-slate-400 italic">Nenhuma mensagem.</p>}
             {playerState.messageLog.slice().reverse().map((msg, index) => (
-              <p key={index} className={index === 0 ? "text-yellow-300" : "text-slate-300"}>&gt; {msg}</p>
+              <p key={index} className={`font-mono ${index === 0 ? "text-yellow-300" : "text-slate-300"}`}>&gt; {msg}</p>
             ))}
           </div>
         </div>
 
-        {/* Inventory */}
         <div>
-          <h3 className="text-lg font-semibold text-purple-300 mb-1 border-b border-slate-700 pb-1">Inventário:</h3>
-          <div className="min-h-[40px] bg-black/30 p-2 rounded text-sm">
+          <h3 className="text-lg font-semibold text-green-400 mb-1 border-b border-slate-700 pb-1">Inventário:</h3>
+          <div className="min-h-[40px] bg-black/40 p-2 rounded text-sm border border-slate-700/50 shadow-inner">
             {playerState.inventory.length === 0 ? (
               <p className="text-slate-400 italic">Vazio</p>
             ) : (
-              <ul className="list-disc list-inside">
+              <ul className="list-none">
                 {playerState.inventory.map(item => (
-                  <li key={item.id} className="text-green-400">
-                    {item.display || item.name} <span className="text-xs text-slate-400">({item.description})</span>
+                  <li key={item.id} className="text-green-300">
+                    <span className="text-xl mr-1">{item.display || '📦'}</span> {item.name} 
+                    <span className="text-xs text-slate-400 italic block ml-5">- {item.description}</span>
                   </li>
                 ))}
               </ul>
@@ -459,10 +484,9 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
           </div>
         </div>
 
-        {/* Command Input Area */}
         {playerState.subState === 'AWAITING_COMMAND_INPUT' && playerState.activeInteraction && (
           <div className="border-t border-slate-700 pt-3">
-            <label htmlFor="commandInput" className="block text-md font-semibold text-yellow-400 mb-1">
+            <label htmlFor="commandInput" className="block text-md font-semibold text-yellow-300 mb-1">
               {playerState.activeInteraction?.commandPrompt || "Digite o comando:"}
             </label>
             <div className="flex gap-2">
@@ -475,20 +499,24 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
                 onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    processInteraction();
+                    playSound(SfxType.UI_CLICK);
+                    processInteractionLogic();
                   } else if (e.key === 'Escape') {
                     e.preventDefault();
+                    playSound(SfxType.UI_CLICK);
                     setPlayerState(prev => ({ ...prev, subState: 'IDLE', commandBuffer: '', activeInteraction: null, interactionCell: null }));
                     addMessageToLog("Comando cancelado.");
                   }
                 }}
-                className="flex-grow p-2 bg-slate-900 text-white border border-purple-500 rounded-md focus:ring-2 focus:ring-purple-400 focus:border-transparent outline-none"
+                className="flex-grow p-2 bg-slate-900 text-slate-100 border border-purple-500 rounded-md focus:ring-2 focus:ring-purple-400 focus:border-transparent outline-none shadow-inner"
                 placeholder="Seu comando aqui..."
+                aria-label="Campo de entrada de comando"
               />
               <button
-                onClick={() => processInteraction()}
-                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition"
+                onClick={() => { playSound(SfxType.UI_CLICK); processInteractionLogic(); }}
+                className="px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-500 transition-colors shadow-md focus:outline-none focus:ring-2 focus:ring-purple-400"
                 title="Enviar Comando (Enter)"
+                aria-label="Enviar Comando"
               >
                 <CheckIcon className="w-5 h-5" />
               </button>
@@ -497,15 +525,15 @@ const KeyboardAdventurerGame: React.FC<KeyboardAdventurerGameProps> = ({ onExit 
         )}
          {playerState.subState === 'SHOWING_MESSAGE' && (
              <button 
-                onClick={() => handleKeyPress({ key: 'Enter', preventDefault: () => {} } as KeyboardEvent)} // Simulate Enter key press
-                className="w-full mt-2 px-4 py-2 bg-sky-600 text-white rounded-md hover:bg-sky-700 transition"
+                onClick={() => { playSound(SfxType.UI_CLICK); handleKeyPressLogic({ key: 'Enter', preventDefault: () => {} } as KeyboardEvent); }} 
+                className="w-full mt-2 px-4 py-2 bg-sky-600 text-white rounded-md hover:bg-sky-500 transition-colors shadow-md focus:outline-none focus:ring-2 focus:ring-sky-400"
             >
                 Ok (Enter)
             </button>
          )}
 
 
-        <button onClick={onExit} className="mt-auto w-full px-6 py-3 bg-red-600/80 text-white text-lg rounded-md hover:bg-red-700/80 transition">
+        <button onClick={handleExitClick} className="mt-auto w-full px-6 py-3 bg-red-700/80 text-white text-lg rounded-md hover:bg-red-600/80 transition-colors shadow-lg focus:outline-none focus:ring-2 focus:ring-red-500">
           Sair da Aventura
         </button>
       </div>

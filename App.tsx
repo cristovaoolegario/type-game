@@ -1,21 +1,33 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GameMode } from './types';
 import GameSelector from './components/GameSelector';
 import HiddenKeyHuntGame from './games/HiddenKeyHuntGame';
 import CommandRaceGame from './games/CommandRaceGame';
 import CodeBuilderGame from './games/CodeBuilderGame';
 import ShortcutDecoderGame from './games/ShortcutDecoderGame';
-import KeyboardAdventurerGame from './games/KeyboardAdventurerGame'; // Import KeyboardAdventurerGame
+import KeyboardAdventurerGame from './games/KeyboardAdventurerGame';
+import { playSound, SfxType, preloadCommonSounds } from './audioManager';
 
 const App: React.FC = () => {
   const [activeGame, setActiveGame] = useState<GameMode | null>(null);
+  const [initialLoad, setInitialLoad] = useState(true);
+
+  useEffect(() => {
+    if (initialLoad) {
+      playSound(SfxType.APP_LAUNCH);
+      preloadCommonSounds(); // Preload some common sounds
+      setInitialLoad(false);
+    }
+  }, [initialLoad]);
 
   const handleSelectGame = (gameMode: GameMode) => {
+    playSound(SfxType.UI_CLICK);
     setActiveGame(gameMode);
   };
 
   const handleExitGame = () => {
+    playSound(SfxType.UI_CLICK);
     setActiveGame(null);
   };
 
@@ -32,8 +44,8 @@ const App: React.FC = () => {
       return <CodeBuilderGame onExit={handleExitGame} />;
     case GameMode.SHORTCUT_DECODER:
       return <ShortcutDecoderGame onExit={handleExitGame} />;
-    case GameMode.KEYBOARD_ADVENTURER: // Add case for KeyboardAdventurerGame
-      return <KeyboardAdventurerGame onExit={handleExitGame} />;
+    // case GameMode.KEYBOARD_ADVENTURER:
+    //   return <KeyboardAdventurerGame onExit={handleExitGame} />;
     default:
       return <GameSelector onSelectGame={handleSelectGame} />;
   }
